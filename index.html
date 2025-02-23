@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Analysis Tool</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: black;
+            color: #fff;
+            font-family: 'Poppins', sans-serif;
+        }
+        .container {
+            width: 70%;
+            margin: auto;
+            background: rgba(0, 0, 0, 0.85);
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
+            margin-top: 50px;
+        }
+        .chart-card:hover {
+            transform: scale(1.05);
+            transition: 0.3s;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        .modal img {
+            max-width: 80%;
+            border-radius: 10px;
+            transition: transform 0.3s ease;
+        }
+        .close-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px 15px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .zoomed {
+            transform: scale(1.5);
+        }
+        .buy-signal {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 10px;
+            background: #00ff99;
+            color: black;
+            font-size: 22px;
+            font-weight: bold;
+            text-align: center;
+            box-shadow: 0 0 20px rgba(0, 255, 153, 0.5);
+            animation: glow 1.5s infinite alternate;
+        }
+        @keyframes glow {
+            from { box-shadow: 0 0 10px rgba(0, 255, 153, 0.5); }
+            to { box-shadow: 0 0 20px rgba(0, 255, 153, 1); }
+        }
+        .stock-chart {
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            height: 150px;
+            gap: 5px;
+            margin-top: 20px;
+        }
+        .candlestick {
+            width: 10px;
+            border-radius: 2px;
+            transition: height 0.5s;
+        }
+        .stock-ticker {
+            font-size: 24px;
+            font-weight: bold;
+            color: #00ff99;
+            text-align: center;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container text-center">
+        <h1 class="text-6xl font-bold text-green-400">📈 Stock Analysis Tool</h1>
+        <p class="text-lg text-gray-300">Analyze stocks, get buy/sell signals, and make informed decisions!</p>
+        
+        <!-- Animated Stock Candlestick Chart -->
+        <div class="stock-chart" id="chart"></div>
+        
+        <!-- Dynamic Percentage Counter -->
+        <div class="stock-ticker" id="ticker">+0.00%</div>
+        
+        <div class="form-section mt-6">
+            <form method="POST">
+                <label class="block text-lg font-medium">Enter Stock Symbol:</label>
+                <input class="p-3 rounded border-none text-black text-lg" type="text" id="stock_symbol" name="stock_symbol" placeholder="e.g. AAPL, TSLA, MSFT" required>
+                <button class="p-3 bg-green-400 text-black font-bold rounded mt-2" type="submit">Analyze</button>
+            </form>
+            <p class="text-white mt-4 italic text-lg">"⏳ Patience is the key to investing 📈"</p>
+        </div>
+        
+        {% if stock_symbol %}
+        <section class="results mt-6">
+            <h2 class="text-2xl font-bold">📊 Results for <span class="text-green-400">{{ stock_symbol }}</span></h2>
+            <div class="charts grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                <div class="chart-card p-4 bg-gray-800 rounded" onclick="expandImage('data:image/png;base64,{{ charts['price'] }}')">
+                    <h3 class="text-lg">Stock Price Chart</h3>
+                    <img class="w-full rounded" src="data:image/png;base64,{{ charts['price'] }}">
+                </div>
+                <div class="chart-card p-4 bg-gray-800 rounded" onclick="expandImage('data:image/png;base64,{{ charts['rsi'] }}')">
+                    <h3 class="text-lg">RSI Chart</h3>
+                    <img class="w-full rounded" src="data:image/png;base64,{{ charts['rsi'] }}">
+                </div>
+                <div class="chart-card p-4 bg-gray-800 rounded" onclick="expandImage('data:image/png;base64,{{ charts['signals'] }}')">
+                    <h3 class="text-lg">Buy/Sell Signals</h3>
+                    <img class="w-full rounded" src="data:image/png;base64,{{ charts['signals'] }}">
+                </div>
+            </div>
+            <div class="buy-signal mt-6">🔥 Today's Buy Signal: <span class="text-black font-bold">{{ today_signal }}</span> 🔥</div>
+        </section>
+        {% endif %}
+    </div>
+    <div id="image-modal" class="modal">
+        <span class="close-btn" onclick="closeModal()">&times;</span>
+        <img id="modal-img" onclick="toggleZoom()">
+    </div>
+    
+    <script>
+        function generateChart() {
+            const chart = document.getElementById("chart");
+            chart.innerHTML = "";
+            for (let i = 0; i < 20; i++) {
+                let height = Math.floor(Math.random() * 100) + 30;
+                let color = Math.random() > 0.5 ? "#00ff99" : "#ff4444";
+                let bar = document.createElement("div");
+                bar.className = "candlestick";
+                bar.style.height = height + "px";
+                bar.style.backgroundColor = color;
+                chart.appendChild(bar);
+            }
+            gsap.from(".candlestick", { opacity: 0, y: 20, stagger: 0.1, duration: 1.5 });
+        }
+        setInterval(generateChart, 2500);
+        
+        function updateTicker() {
+            let value = (Math.random() * 5 - 2.5).toFixed(2);
+            let sign = value > 0 ? "+" : "";
+            let color = value > 0 ? "#00ff99" : "#ff4444";
+            document.getElementById("ticker").innerText = `${sign}${value}%`;
+            document.getElementById("ticker").style.color = color;
+        }
+        setInterval(updateTicker, 1500);
+
+        function expandImage(src) {
+            document.getElementById("modal-img").src = src;
+            document.getElementById("image-modal").style.display = "flex";
+            gsap.from("#modal-img", { scale: 0.8, duration: 0.3, ease: "power2.out" });
+        }
+        function closeModal() {
+            document.getElementById("image-modal").style.display = "none";
+        }
+        function toggleZoom() {
+            let img = document.getElementById("modal-img");
+            img.classList.toggle("zoomed");
+        }
+    </script>
+</body>
+</html>
